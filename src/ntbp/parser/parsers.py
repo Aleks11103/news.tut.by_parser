@@ -128,13 +128,12 @@ class Preview(BaseParser):
 
 
 class NewsParser(BaseParser):
-    def __init__(self, url):
-        self._url = url
+    def __init__(self):
         self.news = {}
 
-    def get_news(self):
+    def __call__(self, url):
         try:
-            html = self._get_page(self._url)
+            html = self._get_page(url)
         except ValueError as error:
             print(error)
         else:
@@ -142,18 +141,20 @@ class NewsParser(BaseParser):
             if box is not None:
                 self.news["head"] = box.find("h1").text
                 box_date = box.find("time", attrs={"itemprop": "datePublished"})
-                self.news["date"] = datetime.fromisoformat(box_date.get("datetime"))
+                self.news["date"] = datetime.fromisoformat(box_date.get("datetime")).timestamp()
                 list_img =  box.find_all("img")
                 if list_img is not None:
                     self.news["src_img"] = []
-                    self.news["src_img"].append([img.attrs["src"] for img in list_img])
-                text_block = box.find("div", attrs={"id": "article_body"})
+                    for img in list_img:
+                        self.news["src_img"].append(img.attrs["src"])
+                text_block = box.find("div", attrs={"id": "article_body"}).text
                 if text_block is not None:
-                    text = text_block.find_all("p")
-                    self.news["text"] = "\n".join([p.text for p in text]).strip()
-        # print(type(self.news["date"])) 
-        # self.save_to_json(box_date.strftime("%Y/%m/%d/%H_%M"))
-        
+                    # text = text_block.find_all("p")
+                    # self.news["text"] = "\n".join([p.text for p in text]).strip()
+                    self.news["text"] = text_block
+        self.save_to_json(
+            datetime.fromtimestamp(self.news["date"]).strftime("%Y/%m/%d/%H_%M")
+        )
         # Выбросить ненужную информация из тегов <p>
 
 
@@ -169,12 +170,19 @@ class NewsParser(BaseParser):
 
 if __name__ == "__main__":
     parser = Preview(page="03.10.2000")
-    # parser2 = Preview(page="20.01.2021")
     parser.get_links()
-    # parser2.get_links()
+    
+    news = NewsParser()
+    # news.__call__(parser[0])
+    pool = ThreadPoolExecutor()
+    start = datetime.now()
+    news_from_page = pool.map(news, parser)
+    for n in news_from_page:
+        pass
+        # print(n)
+        # print("=" * 150)
+    print(datetime.now() - start)
     print(parser._Preview__links.__len__())
     parser.save_to_json("03.10.2000")
-    parser.save_to_file("03.10.2000")    
-
-    news = NewsParser("https://news.tut.by/economics/715166.html")
-    news.get_news()
+    parser.save_to_file("03.10.2000")
+    print(parser._Preview__links)
