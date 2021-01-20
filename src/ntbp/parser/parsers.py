@@ -83,7 +83,7 @@ class Preview(BaseParser):
                     if box2 is not None:
                         for a in box2:
                             link = a.find("a", attrs={"class": "entry__link"})
-                            print(link.get("href"), end='\n\n')
+                            # print(link.get("href"), end='\n\n')
                             self.__links.append(link.get("href"))
             else:
                 self.__list = []
@@ -141,23 +141,46 @@ class NewsParser(BaseParser):
             if box is not None:
                 self.news["head"] = box.find("h1").text
                 box_date = box.find("time", attrs={"itemprop": "datePublished"})
-                self.news["date"] = datetime.fromisoformat(box_date.get("datetime")).timestamp()
+                if box_date is not None:
+                    self.news["date"] = datetime.fromisoformat(box_date.get("datetime")).timestamp()
                 list_img =  box.find_all("img")
+                self.news["src_img"] = []
                 if list_img is not None:
-                    self.news["src_img"] = []
                     for img in list_img:
                         self.news["src_img"].append(img.attrs["src"])
-                text_block = box.find("div", attrs={"id": "article_body"}).text
-                if text_block is not None:
+                if box.find("div", attrs={"id": "article_body"}) is not None:
+                    text_block = box.find("div", attrs={"id": "article_body"}).text
+                # print(text_block, end="\n\n")
+                # if text_block is not None:
                     # text = text_block.find_all("p")
                     # self.news["text"] = "\n".join([p.text for p in text]).strip()
+                    
+                    # a_links = box.select("div#article_body a")
+                    # if a_links is not None:
+                    #     for a in a_links:
+                    #         # print(type(a), a)
+                    #         # print(type(a.text), a.text)
+                    #         tag_text = a.text
+                    #         tag = str(a)
+                    #         # print(type(a), a)
+                    #         text = text_block.replace(tag, tag_text)
+                    #         print("\n\n", text, "\n\n")
+                            
                     self.news["text"] = text_block
-        self.save_to_json(
-            datetime.fromtimestamp(self.news["date"]).strftime("%Y/%m/%d/%H_%M")
-        )
+                
+                if len(self.news["head"]) > 127:
+                    head = self.news["head"][:127].strip()
+                else:
+                    head = self.news["head"].strip()
+                path = datetime.fromtimestamp(self.news["date"]).strftime("%Y/%m/%d/") + head   
+                # self.save_to_json(
+                #     datetime.fromtimestamp(self.news["date"]).strftime("%Y/%m/%d/") + self.news["head"]
+                # )
+                self.save_to_json(path)
         # Выбросить ненужную информация из тегов <p>
 
 
+    # def save_to_json(self, name):
     def save_to_json(self, name):
         path = os.path.join(BASE_DIR, name + ".json")
         dirs = os.path.split(path)[:-1]
@@ -170,11 +193,17 @@ class NewsParser(BaseParser):
 
 if __name__ == "__main__":
     parser = Preview(page="03.10.2000")
+    # parser = Preview(page="19.01.2021")
     parser.get_links()
+    # print(parser[1])
+    # print(parser[1:4])
+    # print(parser[-5:-1:2])
+    # print(parser["key"])
+    # print(parser[3.4])
     
     news = NewsParser()
     # news.__call__(parser[0])
-    pool = ThreadPoolExecutor()
+    pool = ThreadPoolExecutor(max_workers=1)
     start = datetime.now()
     news_from_page = pool.map(news, parser)
     for n in news_from_page:
@@ -183,6 +212,7 @@ if __name__ == "__main__":
         # print("=" * 150)
     print(datetime.now() - start)
     print(parser._Preview__links.__len__())
-    parser.save_to_json("03.10.2000")
-    parser.save_to_file("03.10.2000")
-    print(parser._Preview__links)
+
+    # parser.save_to_json("03.10.2000")
+    # parser.save_to_file("03.10.2000")
+    # print(parser._Preview__links)
