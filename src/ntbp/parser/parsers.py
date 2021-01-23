@@ -2,12 +2,20 @@ import os
 import json
 import pickle
 import requests
+import time
+from threading import Lock
 from datetime import datetime
 from bs4 import BeautifulSoup as BS
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
+
 from ntbp.parser import HOST, PREVIEW_URL, BASE_DIR
+
+
+lock = Lock()
+count = 1
+
 
 class _Base(type):
     # Перехватываем момент создания класса
@@ -132,36 +140,53 @@ class NewsParser(BaseParser):
         self.news = {}
 
     def __call__(self, url):
+        with lock:
+            try:
+                html = self._get_page(url)
+            except ValueError as error:
+                print(error)
+            else:
+                box = html.find("div", attrs={"class": "b-article"})
+                if box is not None:
+                    self.news["head"] = box.find("h1").text
+                    box_date = box.find("time", attrs={"itemprop": "datePublished"})
+                    if box_date is not None:
+                        self.news["date"] = datetime.fromisoformat(box_date.get("datetime")).timestamp()
+                    list_img =  box.find_all("img")
+                    self.news["src_img"] = []
+                    if list_img is not None:
+                        for img in list_img:
+                            self.news["src_img"].append(img.attrs["src"])
+                    if box.find("div", attrs={"id": "article_body"}) is not None:
+                        text_block = box.find("div", attrs={"id": "article_body"}).text
+                        self.news["text"] = text_block 
+                    self.save_to_json()
+
+    def save_to_json(self):
+        global count
+        # print(count, len(self.news["head"]), self.news["head"])
+        
+        date_str = datetime.fromtimestamp(self.news["date"]).strftime("%Y-%m-%d")    # 2021-01-19
+        path_list = []
+        path_list.append(date_str[:4])
+        path_list.append(date_str[5:7])
+        path_list.append(date_str[8:10])
+        # path_list.append(head)
+        path_list.append(str(count))
+        in_path = os.path.join(*path_list)
+        path = os.path.join(BASE_DIR, in_path + ".json")    #
+        dirs = os.path.split(path)[:-1]
         try:
-            html = self._get_page(url)
-        except ValueError as error:
+            os.makedirs(os.path.join(*dirs))
+        except Exception as error:
             print(error)
-        else:
-            box = html.find("div", attrs={"class": "b-article"})
-            if box is not None:
-                self.news["head"] = box.find("h1").text
-                box_date = box.find("time", attrs={"itemprop": "datePublished"})
-                if box_date is not None:
-                    self.news["date"] = datetime.fromisoformat(box_date.get("datetime")).timestamp()
-                list_img =  box.find_all("img")
-                self.news["src_img"] = []
-                if list_img is not None:
-                    for img in list_img:
-                        self.news["src_img"].append(img.attrs["src"])
-                if box.find("div", attrs={"id": "article_body"}) is not None:
-                    text_block = box.find("div", attrs={"id": "article_body"}).text
-                    self.news["text"] = text_block
-                
-                   
-                # self.save_to_json(
-                #     datetime.fromtimestamp(self.news["date"]).strftime("%Y/%m/%d/") + self.news["head"]
-                # )
-                self.save_to_json()
-        # Выбросить ненужную информация из тегов <p>
+        json.dump(self.news, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+        count += 1
 
 
     # def save_to_json(self, name):
-    #     path = os.path.join(BASE_DIR, name + ".json")
+    #     in_path = os.path.join(*name)   #
+    #     path = os.path.join(BASE_DIR, in_path + ".json")    #
     #     dirs = os.path.split(path)[:-1]
     #     try:
     #         os.makedirs(os.path.join(*dirs))
@@ -169,29 +194,10 @@ class NewsParser(BaseParser):
     #         print(error)
     #     json.dump(self.news, open(path, "w", encoding="utf-8"), ensure_ascii=False)
 
-    def save_to_json(self):
-        if len(self.news["head"]) > 127:
-            head = self.news["head"][:128].strip()
-        else:
-            head = self.news["head"].strip()
-        dir_path = datetime.fromtimestamp(self.news["date"]).strftime("%Y/%m/%d/") + head
-        
-        path = os.path.join(BASE_DIR, dir_path + ".json")
-        print("path: " + dir_path)
-        print("head: " + datetime.fromtimestamp(self.news["date"]).strftime("%Y/%m/%d/") + head)
-        # try:
-        #     os.makedirs(os.path.join(*dirs))
-        # except Exception as error:
-        #     print(error)
-        dirs = os.path.split(path)[:-1]
-        if not os.path.isdir(*dirs):
-            os.makedirs(os.path.join(*dirs))
-        json.dump(self.news, open(path, "w", encoding="utf-8"), ensure_ascii=False)
-
 
 if __name__ == "__main__":
-    parser = Preview(page="03.10.2000")
-    # parser = Preview(page="19.01.2021")
+    # parser = Preview(page="03.10.2000")
+    parser = Preview(page="19.01.2021")
     parser.get_links()
     # print(parser[1])
     # print(parser[1:4])
@@ -202,7 +208,9 @@ if __name__ == "__main__":
     news = NewsParser()
     # news.__call__(parser[0])
     pool = ThreadPoolExecutor()
+    print(parser._Preview__links.__len__())
     start = datetime.now()
+    time.sleep(2)
     news_from_page = pool.map(news, parser)
     for n in news_from_page:
         pass
