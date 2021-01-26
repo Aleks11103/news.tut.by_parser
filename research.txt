@@ -1,8 +1,5 @@
 https://news.tut.by/archive/03.10.2000.html
 
-сейчас читают: 
-рекомендуемое:
-
 Для выбора ссылок из класса: class="news-entry ... ni"
 Класс с новостями class="b-news ..."
 
@@ -13,3 +10,11 @@ https://news.tut.by/archive/03.10.2000.html
 
 
 2021-01-16 21:06:00+03:00
+
+
+Выбрать рубрику
+div class="b-label"
+
+
+Выбрать теги
+<ul class="b-article-info-tags">
